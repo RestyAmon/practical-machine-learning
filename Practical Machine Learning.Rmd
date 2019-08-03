@@ -1,0 +1,118 @@
+---
+title: "Practical Machine Learning"
+author: "Resty Amon"
+date: "August 3, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+### Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. <br/>
+
+In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of participants. Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+### Data
+The training data for this project are available here:<br/>
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv<br/>
+The test data are available here:<br/>
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Processing 
+
+### Load the data 
+Read the downloaded files.Using the training data we will build the prediction model to predict the class of the 20 observation in the test data.
+```{r,cache=TRUE}
+training<-read.csv("pml-training.csv",na.strings =c("NA", "#DIV/0!", ""))
+testing<-read.csv("pml-testing.csv",,na.strings =c("NA", "#DIV/0!", ""))
+
+```
+
+### Data Processing
+
+The 1st seven columns are not relevant features for creating the prediction model since they are not direct measurements of the experiment.
+```{r,cache=TRUE}
+# get all features related to motion  
+training<-training[,8:160]
+``` 
+
+Explore the quality of the features in the data frame and check for the remaining NAs. What we can do after this is remove all columns with NA values greater than 50% of the column
+```{r,cache=TRUE}
+#NA VALUES
+table(is.na(training))
+Naindex<-colSums(is.na(training))/nrow(training)>.50
+clean_training<-training[,!Naindex]
+table(is.na(clean_training))
+``` 
+
+### Creating Validation Data Set
+
+Validation set will tell us our expected error on predicting the class of new observations. I set the training set to have 70% of the training data frame and 30% for the validation set.
+```{r,cache=TRUE,warning=FALSE}
+
+#validation and train
+library(caret)
+set.seed(123)
+inTrain<-createDataPartition(clean_training$classe,p=0.7)[[1]]
+train.data<-clean_training[inTrain,]
+validation.data<-clean_training[-inTrain,]
+
+dim(train.data)
+dim(validation.data)
+
+```
+
+
+### Prediction Models
+I decided to create prediction models uisng decision tree and random forest. Decision trees are pretty much explainable but has little predictive power while random forest suffers explainabilty but much reliable on its predictiion.
+
+#### Decision Tree
+
+I build the decision tree model using rpart and trained it using the train data.
+The decision tree model had some difficulty on determining the difference between the classes with only 55% accuracy. 
+```{r,cache=TRUE}
+
+#training decision Tree
+set.seed(123)
+train.data$classe<-as.factor(train.data$classe)
+tree.fit <- train(classe ~., method='rpart', data=train.data)
+
+#Validation Data
+validation.data$classe<-as.factor(validation.data$classe)
+tree_prediction<- predict(tree.fit, validation.data)
+confusionMatrix(validation.data$classe, tree_prediction)
+
+```
+
+Below is the plot that summarize how the model came up with the prediction
+```{r,cache=T}
+library(rpart)
+rpart.plot::rpart.plot(tree.fit$finalModel)
+```
+
+
+#### Random Forest
+
+Using random forest algorithm with 1000 trees the mode's prediction is very high at 99.44% accuracy.  With this the expected error is around 0.56%.
+```{r,cache=T,warning=FALSE,message=FALSE}
+library(randomForest)
+
+set.seed(123)
+rf.fit <- randomForest(classe ~ ., data = train.data, ntree = 1000)
+
+prediction_validation <- predict(rf.fit, validation.data, type = "class")
+confusionMatrix(prediction_validation, validation.data$classe)
+
+```
+
+
+### Prediction on Test Data
+With the result of the two prediction models it is reasonable to predict the test set using random forest model. Below is the result of prediction.
+
+```{r,cache=T}
+predict(rf.fit, testing, type = "class")
+```
